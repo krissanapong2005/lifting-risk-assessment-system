@@ -35,38 +35,49 @@ def detect_twist_angle(landmarks):
 
 # === ฟังก์ชันหลัก: วิเคราะห์ตำแหน่งมือ (ระดับความสูง + ระยะจากลำตัว) ===
 def get_hand_position_info(landmarks):
-    # ดึงตำแหน่งข้อมือซ้ายและขวา แล้วหาค่ากลาง (midpoint)
+    # ดึงตำแหน่งข้อมือและหัวไหล่
     lh = landmarks.landmark[mp.solutions.pose.PoseLandmark.LEFT_WRIST]
     rh = landmarks.landmark[mp.solutions.pose.PoseLandmark.RIGHT_WRIST]
+    ls = landmarks.landmark[mp.solutions.pose.PoseLandmark.LEFT_SHOULDER]
+    rs = landmarks.landmark[mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER]
+    lhip = landmarks.landmark[mp.solutions.pose.PoseLandmark.LEFT_HIP]
+    rhip = landmarks.landmark[mp.solutions.pose.PoseLandmark.RIGHT_HIP]
+    lknee = landmarks.landmark[mp.solutions.pose.PoseLandmark.LEFT_KNEE]
+    rknee = landmarks.landmark[mp.solutions.pose.PoseLandmark.RIGHT_KNEE]
+
+    # จุดกลางของมือและหัวไหล่
     mid_hand_x = (lh.x + rh.x) / 2
     mid_hand_y = (lh.y + rh.y) / 2
+    mid_shoulder_x = (ls.x + rs.x) / 2
+    mid_shoulder_y = (ls.y + rs.y) / 2
 
-    # ดึงค่าระดับอ้างอิงสำหรับการแบ่งระดับความสูง
-    shoulder_y = (landmarks.landmark[mp.solutions.pose.PoseLandmark.LEFT_SHOULDER].y +
-                  landmarks.landmark[mp.solutions.pose.PoseLandmark.RIGHT_SHOULDER].y) / 2
-    hip_y = (landmarks.landmark[mp.solutions.pose.PoseLandmark.LEFT_HIP].y +
-             landmarks.landmark[mp.solutions.pose.PoseLandmark.RIGHT_HIP].y) / 2
-    knee_y = (landmarks.landmark[mp.solutions.pose.PoseLandmark.LEFT_KNEE].y +
-              landmarks.landmark[mp.solutions.pose.PoseLandmark.RIGHT_KNEE].y) / 2
+    # คำนวณระยะห่างจากหัวไหล่ในแนวนอน
+    dist_x = abs(mid_hand_x - mid_shoulder_x)
 
-    # แบ่งความสูงของมือเป็น 4 ช่วง ตามแบบฟอร์ม
+    # Normalize ระยะห่างเทียบกับช่วงไหล่
+    shoulder_width = abs(ls.x - rs.x)
+    rel_dist = dist_x / shoulder_width if shoulder_width > 0 else 0
+
+    # แบ่งระยะห่างจากลำตัว (อิงกับไหล่)
+    if rel_dist < 0.4:
+        distance = 'ใกล้ตัว'
+    elif rel_dist < 0.8:
+        distance = 'ปานกลาง'
+    else:
+        distance = 'เหยียดแขน'
+
+    # ประเมินระดับความสูง
+    hip_y = (lhip.y + rhip.y) / 2
+    knee_y = (lknee.y + rknee.y) / 2
+    shoulder_y = mid_shoulder_y
+
     if mid_hand_y < shoulder_y:
-        height_level = 'เหนือหัวไหล่'
+        height = 'เหนือหัวไหล่'
     elif mid_hand_y < hip_y:
-        height_level = 'หัวไหล่ถึงเอว'
+        height = 'หัวไหล่ถึงเอว'
     elif mid_hand_y < knee_y:
-        height_level = 'หัวเข่าถึงเอว'
+        height = 'เอวถึงหัวเข่า'
     else:
-        height_level = 'ใต้เข่า'
+        height = 'ใต้เข่า'
 
-    # วิเคราะห์ "ระยะห่างจากลำตัว" จากระยะห่างในแนวนอนจากจุดกลางภาพ (0.5)
-    rel_x = abs(mid_hand_x - 0.5)
-    if rel_x < 0.1:
-        dist = 'ใกล้ตัว'
-    elif rel_x < 0.2:
-        dist = 'ปานกลาง'
-    else:
-        dist = 'เหยียดแขน'
-
-    # คืนผลลัพธ์เป็น dictionary
-    return {'height': height_level, 'distance': dist}
+    return {'height': height, 'distance': distance}

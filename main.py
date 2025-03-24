@@ -28,6 +28,7 @@ def run_analysis(weight_str, freq_str):
 
     # โหลดวิดีโอที่ต้องวิเคราะห์ (กรุณาตรวจสอบ path)
     cap = cv2.VideoCapture(r'D:\Github\lifting-risk-assessment-system\video_ยกของ.mp4')
+    #cap = cv2.VideoCapture(r"D:\Github\lifting-risk-assessment-system\IMG_5132.MOV")
     if not cap.isOpened():
         messagebox.showerror("Video Error", "ไม่สามารถเปิดไฟล์ video.mp4 ได้")
         return
@@ -49,7 +50,7 @@ def run_analysis(weight_str, freq_str):
             ret, frame = cap.read()
             if not ret:
                 break
-
+            #frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
             frame_idx += 1
             image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = pose.process(image_rgb)
