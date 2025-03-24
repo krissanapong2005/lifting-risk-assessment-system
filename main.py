@@ -7,7 +7,7 @@ import os
 import mediapipe as mp
 import csv
 
-from lifting_assessment import assess_lifting_risk
+from lifting_assessment import assess_lifting_risk,draw_thai_text
 from pose_utils import get_hand_position_info, detect_twist_angle
 
 
@@ -40,7 +40,7 @@ def run_analysis(weight_str, freq_str):
     try:
         csv_file = open(csv_path, mode='w', newline='', encoding='utf-8-sig')
         csv_writer = csv.writer(csv_file)
-        csv_writer.writerow(['Frame', 'LH Index', 'Risk Level', 'Twist Angle', 'RWL'])
+        csv_writer.writerow(['Frame', 'LH Index', 'Risk Level', 'Twist Angle', 'RWL', 'Position'])
 
         pose = mp_pose.Pose(static_image_mode=False)
         frame_idx = 0
@@ -57,7 +57,7 @@ def run_analysis(weight_str, freq_str):
             if results and results.pose_landmarks:
                 # 1. ประเมินตำแหน่งมือ
                 hand_info = get_hand_position_info(results.pose_landmarks)
-
+                position_text = f"{hand_info['height']} / {hand_info['distance']}"
                 # 2. ประเมินการบิดตัว
                 twist_angle, is_twisted = detect_twist_angle(results.pose_landmarks)
 
@@ -83,15 +83,14 @@ def run_analysis(weight_str, freq_str):
 
                 # วาดข้อความ LH Index, มุมบิด, RWL,ตำแหน่งมือ
                 cv2.putText(annotated, f"LH Index: {result['lh_index']:.2f} (Level {result['risk_level_num']})", (30, 50),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 2)
                 cv2.putText(annotated, f"Twist Angle: {twist_angle:.1f} deg", (30, 80),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
                 cv2.putText(annotated, f"RWL: {result['rwl']:.2f} kg", (30, 110),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
 
-                position_text = f"{hand_info['height']} / {hand_info['distance']}"
-                cv2.putText(annotated, f"Position: {position_text}", (30, 140),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 255), 2)
+                thai_text = f"ตำแหน่ง: {position_text}"
+                annotated = draw_thai_text(annotated, thai_text, position=(30, 140), font_size=28, color=(0, 0, 0))
 
 
 
@@ -105,7 +104,8 @@ def run_analysis(weight_str, freq_str):
                     f"{result['lh_index']:.2f}",
                     result['risk_level'],
                     f"{twist_angle:.1f}",
-                    f"{result['rwl']:.2f}"
+                    f"{result['rwl']:.2f}",
+                    position_text,
                 ])
 
         cap.release()

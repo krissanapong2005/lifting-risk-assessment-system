@@ -53,3 +53,23 @@ def assess_lifting_risk(hand_info, actual_weight, lifting_freq_option, is_twiste
         'risk_level': level,
         'risk_level_num': level_num
     }
+
+from PIL import ImageFont, ImageDraw, Image
+import numpy as np
+
+def draw_thai_text(image, text, position, font_size=28, color=(255, 255, 255)):
+    """
+    วาดข้อความภาษาไทยลงบนภาพ OpenCV โดยใช้ Pillow
+    """
+    # แปลงจาก OpenCV เป็น PIL
+    img_pil = Image.fromarray(image)
+    draw = ImageDraw.Draw(img_pil)
+
+    # โหลดฟอนต์ภาษาไทย (คุณอาจต้องเปลี่ยน path ฟอนต์ตามเครื่องคุณ)
+    font = ImageFont.truetype("D:\Github\lifting-risk-assessment-system\Sarabun\Sarabun-Regular.ttf", font_size)
+
+    # วาดข้อความ
+    draw.text(position, text, font=font, fill=color)
+
+    # แปลงกลับเป็น OpenCV
+    return np.array(img_pil)
