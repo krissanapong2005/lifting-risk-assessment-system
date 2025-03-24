@@ -6,28 +6,77 @@ import cv2
 import os
 import mediapipe as mp
 import csv
+
 from lifting_assessment import assess_lifting_risk
 from pose_utils import get_hand_position_info, detect_twist_angle
 
+def draw_grid(image, landmarks):
+    """
+    วาดกรอบ 4x3 grid บนภาพ โดยอิงจากตำแหน่งไหล่-เอว-เข่า-ข้อเท้า และแนวกึ่งกลางลำตัว
+    """
+    h, w, _ = image.shape
 
+    # จุดอ้างอิงแนวแกน y (แบ่ง 4 ช่วงความสูง)
+    shoulder_y = (landmarks.landmark[mp_pose.PoseLandmark.LEFT_SHOULDER].y +
+                  landmarks.landmark[mp_pose.PoseLandmark.RIGHT_SHOULDER].y) / 2
+    hip_y = (landmarks.landmark[mp_pose.PoseLandmark.LEFT_HIP].y +
+             landmarks.landmark[mp_pose.PoseLandmark.RIGHT_HIP].y) / 2
+    knee_y = (landmarks.landmark[mp_pose.PoseLandmark.LEFT_KNEE].y +
+              landmarks.landmark[mp_pose.PoseLandmark.RIGHT_KNEE].y) / 2
+    ankle_y = (landmarks.landmark[mp_pose.PoseLandmark.LEFT_ANKLE].y +
+               landmarks.landmark[mp_pose.PoseLandmark.RIGHT_ANKLE].y) / 2
+
+    y_top = int(shoulder_y * h * 0.8)   # ด้านบนสุดของ Grid
+    y1 = int(shoulder_y * h)
+    y2 = int(hip_y * h)
+    y3 = int(knee_y * h)
+    y4 = int(ankle_y * h * 1.1)         # ขยายล่างสุดให้เห็นใต้เข่า
+
+    # จุดแนวตั้ง (x) แบ่งระยะใกล้-กลาง-ไกล
+    center_x = int(((landmarks.landmark[mp_pose.PoseLandmark.LEFT_HIP].x +
+                     landmarks.landmark[mp_pose.PoseLandmark.RIGHT_HIP].x) / 2) * w)
+
+    x0 = center_x - int(0.12 * w)  # ซ้ายสุด (ใกล้ตัว)
+    x1 = center_x - int(0.04 * w)  # ปานกลาง
+    x2 = center_x + int(0.04 * w)
+    x3 = center_x + int(0.12 * w)  # ขวาสุด (เหยียดแขน)
+
+    # === วาดเส้นแนวนอน (4 แถว = 5 เส้น)
+    for y in [y_top, y1, y2, y3, y4]:
+        cv2.line(image, (x0, y), (x3, y), (255, 255, 255), 1)
+
+    # === วาดเส้นแนวตั้ง (3 คอลัมน์ = 4 เส้น)
+    for x in [x0, x1, x2, x3]:
+        cv2.line(image, (x, y_top), (x, y4), (255, 255, 255), 1)
+
+    # === เขียน label กรอบ
+    cv2.putText(image, "GRID 4x3", (x0, y_top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 255), 1)
+
+
+# === ตั้งค่า Mediapipe Pose Drawing ===
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
 
+# === ฟังก์ชันหลักที่ประมวลผลวิดีโอ ===
 def run_analysis(weight_str, freq_str):
     try:
+        # แปลง input เป็นตัวเลข
         actual_weight = float(weight_str)
         lifting_freq_option = int(freq_str)
     except ValueError:
         messagebox.showerror("Invalid Input", "Please enter valid number values.")
         return
 
+    # โหลดวิดีโอที่ต้องวิเคราะห์ (กรุณาตรวจสอบ path)
     cap = cv2.VideoCapture(r'D:\Github\lifting-risk-assessment-system\video_ยกของ.mp4')
     if not cap.isOpened():
         messagebox.showerror("Video Error", "ไม่สามารถเปิดไฟล์ video.mp4 ได้")
         return
 
+    # สร้างโฟลเดอร์ output ถ้ายังไม่มี
     os.makedirs('output', exist_ok=True)
 
+    # เตรียมเปิดไฟล์ CSV เพื่อบันทึกผลลัพธ์
     csv_path = 'output/analysis_results.csv'
     try:
         csv_file = open(csv_path, mode='w', newline='', encoding='utf-8-sig')
@@ -35,8 +84,8 @@ def run_analysis(weight_str, freq_str):
         csv_writer.writerow(['Frame', 'LH Index', 'Risk Level', 'Twist Angle', 'RWL'])
 
         pose = mp_pose.Pose(static_image_mode=False)
-
         frame_idx = 0
+
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
@@ -47,9 +96,13 @@ def run_analysis(weight_str, freq_str):
             results = pose.process(image_rgb)
 
             if results and results.pose_landmarks:
+                # 1. ประเมินตำแหน่งมือ
                 hand_info = get_hand_position_info(results.pose_landmarks)
+
+                # 2. ประเมินการบิดตัว
                 twist_angle, is_twisted = detect_twist_angle(results.pose_landmarks)
 
+                # 3. คำนวณ RWL, LH Index และความเสี่ยง
                 result = assess_lifting_risk(
                     hand_info=hand_info,
                     actual_weight=actual_weight,
@@ -57,9 +110,10 @@ def run_analysis(weight_str, freq_str):
                     is_twisted=is_twisted
                 )
 
+                # 4. คัดลอกภาพเดิมมาวาดผลการวิเคราะห์
                 annotated = frame.copy()
 
-
+                # วาด keypoints และ skeleton
                 mp_drawing.draw_landmarks(
                     annotated,
                     results.pose_landmarks,
@@ -68,7 +122,7 @@ def run_analysis(weight_str, freq_str):
                     connection_drawing_spec=mp_drawing.DrawingSpec(color=(0, 128, 255), thickness=2)
                 )
 
-
+                # วาดข้อความ LH Index, มุมบิด, RWL
                 cv2.putText(annotated, f"LH Index: {result['lh_index']:.2f} (Level {result['risk_level'].split()[1]})", (30, 50),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                 cv2.putText(annotated, f"Twist Angle: {twist_angle:.1f} deg", (30, 80),
@@ -76,8 +130,11 @@ def run_analysis(weight_str, freq_str):
                 cv2.putText(annotated, f"RWL: {result['rwl']:.2f} kg", (30, 110),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
+                # บันทึกภาพเฟรมลงโฟลเดอร์
+                draw_grid(annotated, results.pose_landmarks)
                 cv2.imwrite(f'output/frame_{frame_idx}.jpg', annotated)
 
+                # บันทึกลง CSV
                 csv_writer.writerow([
                     frame_idx,
                     f"{result['lh_index']:.2f}",
@@ -88,24 +145,28 @@ def run_analysis(weight_str, freq_str):
 
         cap.release()
         csv_file.close()
+
         messagebox.showinfo("เสร็จสิ้น", "การวิเคราะห์เสร็จแล้ว! ไปดูผลลัพธ์ในโฟลเดอร์ output ได้เลย")
+
     except Exception as e:
         messagebox.showerror("CSV Error", f"เกิดข้อผิดพลาดในการเขียนไฟล์ CSV: {e}")
+
     finally:
+        # ปิดไฟล์ csv ถ้าหลุดออกจาก try
         if 'csv_file' in locals() and not csv_file.closed:
             csv_file.close()
 
-
+# === สร้างหน้าต่าง GUI หลัก ===
 root = tk.Tk()
 root.title("LiftGuard - Lifting Risk Assessment")
 root.geometry("400x250")
 
-
+# === Input: น้ำหนักที่ยก ===
 tk.Label(root, text="น้ำหนักที่ยกจริง (kg):").pack(pady=(20, 5))
 entry_weight = tk.Entry(root)
 entry_weight.pack()
 
-
+# === Input: จำนวนรอบการยก ===
 tk.Label(root, text="จำนวนรอบการยก:").pack(pady=(15, 5))
 combo_freq = ttk.Combobox(root, state="readonly")
 combo_freq['values'] = [
@@ -116,12 +177,13 @@ combo_freq['values'] = [
 combo_freq.current(1)
 combo_freq.pack()
 
-# ปุ่มรัน
+# === ปุ่มรันวิเคราะห์ ===
 def on_run():
     weight = entry_weight.get()
-    freq_option = combo_freq.get().split(" ")[0]
+    freq_option = combo_freq.get().split(" ")[0]  # เอาเลขลำดับ 1/2/3 มาใช้
     threading.Thread(target=run_analysis, args=(weight, freq_option), daemon=True).start()
 
 tk.Button(root, text="Run Analysis", command=on_run, bg="green", fg="white").pack(pady=20)
 
+# === เริ่ม GUI loop ===
 root.mainloop()
