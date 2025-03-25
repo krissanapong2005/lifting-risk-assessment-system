@@ -1,3 +1,7 @@
+import numpy as np
+import mediapipe as mp
+
+
 def table_values(foot, heel, shoulder, hip, knee, hand, width, height, landmarks):
     # คำนวณระยะระหว่างเท้ากับส้นเท้า
     distance_vector = np.array(foot) - np.array(heel)
@@ -30,7 +34,7 @@ def table_values(foot, heel, shoulder, hip, knee, hand, width, height, landmarks
     elif sector2[0] <= mid_hand_x < sector3[0]:
         sector = "Sector3"
     else:
-        return "Out of range"
+        return None, None  # ✅ เปลี่ยนตรงนี้ (คืน 2 ค่าเสมอ!)
 
     # ตรวจสอบตำแหน่งแนวแกน Y
     if mid_hand_y < shoulder_y:

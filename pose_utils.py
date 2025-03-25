@@ -61,7 +61,7 @@ def get_hand_position_info(landmarks):
     # แบ่งระยะห่างจากลำตัว (อิงกับไหล่)
     if rel_dist < 0.4:
         distance = 'ใกล้ตัว'
-    elif rel_dist < 0.8:
+    elif rel_dist < 0.99:
         distance = 'ปานกลาง'
     else:
         distance = 'เหยียดแขน'
